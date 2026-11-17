@@ -2,12 +2,15 @@
 
 ![PhishProbe dashboard](assets/phishprobe-dashboard.png)
 
+**Live demo:** [Try PhishProbe](https://phishprobeai.streamlit.app/)
+
 A Streamlit application and a set of Jupyter notebooks for extracting URL
 features, training phishing classifiers, and comparing their performance.
 
-> **Research/demo notice:** This project is not a security product. Model
-> predictions are estimates and must not be used as the sole basis for deciding
-> whether a website is safe.
+> **Research prototype:** The model was trained and evaluated on the project's
+> datasets, and the reported results reflect those evaluations. Predictions on
+> new URLs may differ, so use them as guidance rather than a guarantee of
+> safety.
 
 ## Project architecture
 
