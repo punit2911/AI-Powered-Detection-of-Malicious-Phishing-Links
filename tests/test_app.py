@@ -3,10 +3,33 @@ from pathlib import Path
 
 from streamlit.testing.v1 import AppTest
 
+from app import RESEARCH_ACCURACIES, RESEARCH_KEY_METRICS, research_accuracy_chart
+
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
 
 
 class StreamlitAppTests(unittest.TestCase):
+    def test_dashboard_renders_model_analytics_charts(self):
+        app = AppTest.from_file(str(APP_PATH)).run(timeout=20)
+
+        self.assertFalse(app.exception)
+        self.assertGreaterEqual(len(app.get("plotly_chart")), 3)
+
+    def test_static_research_metrics_and_accuracy_chart_are_displayed(self):
+        app = AppTest.from_file(str(APP_PATH)).run(timeout=20)
+
+        self.assertFalse(app.exception)
+        metrics = {metric.label: metric.value for metric in app.metric}
+        for label, value in RESEARCH_KEY_METRICS.items():
+            self.assertEqual(metrics[label], f"{value:.2%}")
+
+        chart = research_accuracy_chart().data[0]
+        self.assertEqual(set(chart.y), set(RESEARCH_ACCURACIES))
+        self.assertEqual(
+            dict(zip(chart.y, chart.x)),
+            RESEARCH_ACCURACIES,
+        )
+
     def test_empty_url_shows_validation_error(self):
         app = AppTest.from_file(str(APP_PATH)).run(timeout=10)
 
@@ -24,8 +47,8 @@ class StreamlitAppTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertTrue(
             any(
-                element.value == "Likely a legitimate URL"
-                for element in app.subheader
+                "Likely legitimate" in element.value
+                for element in app.markdown
             )
         )
 
@@ -48,7 +71,7 @@ class StreamlitAppTests(unittest.TestCase):
 
         self.assertFalse(app.exception)
         self.assertTrue(
-            any(element.value == "Likely a phishing URL" for element in app.subheader)
+            any("Likely phishing" in element.value for element in app.markdown)
         )
 
 

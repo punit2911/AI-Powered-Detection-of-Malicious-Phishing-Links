@@ -58,6 +58,16 @@ flowchart LR
 | `5_Model-Selection.ipynb` | Evaluates the ExtraTrees-selected dataset and compares models in more detail. |
 | `main.ipynb` | Earlier/combined experimentation notebook; the numbered notebooks describe the staged workflow. |
 
+### Demo dashboard
+
+The Streamlit interface includes a URL scanner, a live phishing-score gauge,
+and a linear-model feature-contribution chart. The analytics tabs show
+current-session scan summaries plus the classifier's held-out accuracy,
+precision, recall, F1 score, confusion matrix, and training-set class balance.
+The Model insights tab also presents static research-summary metrics separately
+from the checked-in model's calculated holdout results. Session history is
+temporary and stores hostnames rather than full URLs.
+
 ## Data and artifacts
 
 The numbered notebooks use a balanced 10,000-row sample: 5,000 legitimate and
@@ -129,6 +139,30 @@ Trends and Innovation*, vol. 2, issue 11, November 2024, paper IJNTI2411009.
 The paper values above are reported results, distinct from the project
 notebook's saved outputs; differences between them should not be treated as a
 reproducibility comparison without matching datasets and experimental settings.
+
+### Research summary figures displayed in the dashboard
+
+These static figures were supplied for the demo and are shown separately from
+the app's calculated Logistic Regression holdout metrics. They are presented
+for showcase context and have not been independently reproduced here.
+
+| Classifier | Reported accuracy |
+| --- | ---: |
+| Stacking + Extra Trees | 82.00% |
+| Stacking Classifier | 81.55% |
+| Random Forest | 81.25% |
+| XGBoost | 80.95% |
+| K-Nearest Neighbors | 78.65% |
+| Gradient Boosting | 77.85% |
+| Decision Tree | 76.60% |
+| AdaBoost | 75.95% |
+| Support Vector Machine | 70.90% |
+| Logistic Regression | 70.30% |
+| Gaussian Naive Bayes | 66.45% |
+
+The same summary reports key metrics of 81.35% accuracy, 80.66% precision, and
+81.88% recall. These results are static reference figures, not measurements
+from URL scans or the checked-in `model.pkl`.
 
 ## Run the prototype
 
