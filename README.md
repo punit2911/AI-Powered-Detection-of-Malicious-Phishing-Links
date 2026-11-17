@@ -123,7 +123,7 @@ performance. The notebook's ROC plotting code passes hard class predictions
 to the ROC/AUC functions; its plotted ROC curves should not be interpreted as
 probability-score ROC analysis.
 
-### Accuracies reported in the accompanying paper
+### Accuracies reported in the accompanying published paper
 
 The paper reports accuracy values for individual algorithms in its algorithms
 section (printed page a72 / PDF page 5). It does not report precision, recall,
