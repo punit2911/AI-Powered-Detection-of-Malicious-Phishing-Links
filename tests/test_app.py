@@ -1,9 +1,10 @@
 import unittest
 from pathlib import Path
 
+from sklearn.ensemble import RandomForestClassifier
 from streamlit.testing.v1 import AppTest
 
-from app import RESEARCH_ACCURACIES, RESEARCH_KEY_METRICS, research_accuracy_chart
+from app import MODEL_PATH, SHOWCASE_METRICS, load_model
 
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
 
@@ -13,22 +14,24 @@ class StreamlitAppTests(unittest.TestCase):
         app = AppTest.from_file(str(APP_PATH)).run(timeout=20)
 
         self.assertFalse(app.exception)
-        self.assertGreaterEqual(len(app.get("plotly_chart")), 3)
+        self.assertGreaterEqual(len(app.get("plotly_chart")), 2)
 
-    def test_static_research_metrics_and_accuracy_chart_are_displayed(self):
+    def test_showcase_metrics_are_displayed_without_classifier_comparison_chart(self):
         app = AppTest.from_file(str(APP_PATH)).run(timeout=20)
 
         self.assertFalse(app.exception)
         metrics = {metric.label: metric.value for metric in app.metric}
-        for label, value in RESEARCH_KEY_METRICS.items():
-            self.assertEqual(metrics[label], f"{value:.2%}")
-
-        chart = research_accuracy_chart().data[0]
-        self.assertEqual(set(chart.y), set(RESEARCH_ACCURACIES))
-        self.assertEqual(
-            dict(zip(chart.y, chart.x)),
-            RESEARCH_ACCURACIES,
+        for label, value in SHOWCASE_METRICS.items():
+            self.assertEqual(metrics[label], value)
+        self.assertEqual(metrics["Accuracy"], "81.25%")
+        self.assertFalse(
+            any("Reported accuracy by classifier" in item.value for item in app.markdown)
         )
+
+    def test_checked_in_pipeline_uses_random_forest(self):
+        model = load_model(str(MODEL_PATH), MODEL_PATH.stat().st_mtime)
+
+        self.assertIsInstance(model.named_steps["classifier"], RandomForestClassifier)
 
     def test_empty_url_shows_validation_error(self):
         app = AppTest.from_file(str(APP_PATH)).run(timeout=10)

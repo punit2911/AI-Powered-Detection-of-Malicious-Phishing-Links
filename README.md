@@ -10,9 +10,9 @@ features, training phishing classifiers, and comparing their performance.
 ## Project architecture
 
 The notebooks prepare data and evaluate several models. `train_model.py`
-recreates the selected Logistic Regression model as a pipeline that includes
-the same MinMax scaling used during training. The Streamlit app extracts the
-pipeline's 15 URL features and uses the checked-in `model.pkl` for inference.
+recreates the selected Random Forest model as a pipeline with MinMax scaling.
+The Streamlit app extracts the pipeline's 15 URL features and uses the
+checked-in `model.pkl` for inference.
 
 ```mermaid
 flowchart LR
@@ -29,15 +29,15 @@ flowchart LR
         H --> J
         I --> J
         H --> K["5_Model-Selection.ipynb<br/>evaluate selected feature set"]
-        H --> T["train_model.py<br/>MinMaxScaler + LogisticRegression"]
-        T --> M["model.pkl<br/>15-feature pipeline"]
+        H --> T["train_model.py<br/>80/20 split + MinMaxScaler + Random Forest"]
+        T --> M["model.pkl<br/>15-feature Random Forest pipeline"]
         J --> L["Saved notebook metrics and plots"]
         K --> L
     end
 
     subgraph Inference["Streamlit app (app.py)"]
         U["User enters URL"] --> X["Normalize URL + extract<br/>the 15 selected features"]
-        X --> P["model.pkl pipeline<br/>MinMaxScaler + classifier"]
+        X --> P["model.pkl pipeline<br/>MinMaxScaler + Random Forest"]
         P --> R["Display predicted class<br/>(1 = phishing) and safety guidance"]
     end
 ```
@@ -46,10 +46,10 @@ flowchart LR
 
 | Component | Purpose |
 | --- | --- |
-| `app.py` | Streamlit URL input, inference, and result/feature display. |
+| `app.py` | Streamlit URL input, Random Forest inference, and result/feature-importance display. |
 | `features_extraction.py` | `Extractor` computes the 15 URL-derived features in the exact order expected by the selected model. |
-| `train_model.py` | Reproduces the selected training split and saves a scikit-learn pipeline with MinMax scaling and Logistic Regression. |
-| `model.pkl` | Serialized scikit-learn pipeline (MinMax scaling + Logistic Regression), fitted to the 15 ordered columns in `dataset_2.csv`. |
+| `train_model.py` | Reproduces the selected training split and saves a scikit-learn pipeline with MinMax scaling and Random Forest. |
+| `model.pkl` | Serialized scikit-learn pipeline (MinMax scaling + Random Forest), fitted to the 15 ordered columns in `dataset_2.csv`. |
 | `extractor.pkl` | Additional serialized notebook artifact; it is not loaded by `app.py`. |
 | `1_Data-Gathering.ipynb` | Samples labeled URLs from `test.csv` and writes the two URL lists. |
 | `2_Feature-Extraction.ipynb` | Extracts features and creates the combined `urldata.csv` dataset. |
@@ -61,12 +61,13 @@ flowchart LR
 ### Demo dashboard
 
 The Streamlit interface includes a URL scanner, a live phishing-score gauge,
-and a linear-model feature-contribution chart. The analytics tabs show
+and a global Random Forest feature-importance chart. The analytics tabs show
 current-session scan summaries plus the classifier's held-out accuracy,
 precision, recall, F1 score, confusion matrix, and training-set class balance.
 The Model insights tab also presents static research-summary metrics separately
-from the checked-in model's calculated holdout results. Session history is
-temporary and stores hostnames rather than full URLs.
+from the checked-in Random Forest's calculated holdout results; the
+classifier-comparison chart is omitted. Session history is temporary and stores
+hostnames rather than full URLs.
 
 ## Data and artifacts
 
@@ -110,11 +111,12 @@ re-run as part of this README update.
 | Logistic Regression | 0.7030 | 0.7345 | 0.6245 | 0.6751 |
 | Gaussian Naive Bayes | 0.6645 | 0.9490 | 0.3391 | 0.4996 |
 
-The notebook selects the stacking classifier as its top result by accuracy.
-These are notebook experiment results, not a guarantee of real-world
-phishing-detection performance. The notebook's ROC plotting code passes hard
-class predictions to the ROC/AUC functions; its plotted ROC curves should not
-be interpreted as probability-score ROC analysis.
+The notebook selects the stacking classifier as its top result by accuracy,
+while the demo app uses Random Forest for live inference. These are notebook
+experiment results, not a guarantee of real-world phishing-detection
+performance. The notebook's ROC plotting code passes hard class predictions
+to the ROC/AUC functions; its plotted ROC curves should not be interpreted as
+probability-score ROC analysis.
 
 ### Accuracies reported in the accompanying paper
 
@@ -140,29 +142,18 @@ The paper values above are reported results, distinct from the project
 notebook's saved outputs; differences between them should not be treated as a
 reproducibility comparison without matching datasets and experimental settings.
 
-### Research summary figures displayed in the dashboard
+### Static showcase figures displayed in the dashboard
 
-These static figures were supplied for the demo and are shown separately from
-the app's calculated Logistic Regression holdout metrics. They are presented
-for showcase context and have not been independently reproduced here.
+These static figures were supplied in the project resume summary and are shown
+separately from the app's calculated Random Forest holdout metrics. They are
+presented for showcase context and have not been independently reproduced
+here.
 
-| Classifier | Reported accuracy |
-| --- | ---: |
-| Stacking + Extra Trees | 82.00% |
-| Stacking Classifier | 81.55% |
-| Random Forest | 81.25% |
-| XGBoost | 80.95% |
-| K-Nearest Neighbors | 78.65% |
-| Gradient Boosting | 77.85% |
-| Decision Tree | 76.60% |
-| AdaBoost | 75.95% |
-| Support Vector Machine | 70.90% |
-| Logistic Regression | 70.30% |
-| Gaussian Naive Bayes | 66.45% |
-
-The same summary reports key metrics of 81.35% accuracy, 80.66% precision, and
-81.88% recall. These results are static reference figures, not measurements
-from URL scans or the checked-in `model.pkl`.
+The summary identifies Random Forest as the best single classifier (81.25%
+accuracy). It reports 82.00% accuracy, 80.70% precision, and 81.90% recall for
+the combined Stacking Classifiers + Extra Trees result. The ensemble values
+are static research figures, not measurements from URL scans or the
+checked-in `model.pkl`.
 
 ## Run the prototype
 

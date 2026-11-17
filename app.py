@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -41,23 +42,11 @@ FEATURE_LABELS = {
     "IpAddress": "IP address host",
     "TinyURL": "Shortener pattern",
 }
-RESEARCH_ACCURACIES = {
-    "Stacking + Extra Trees": 82.00,
-    "Stacking Classifier": 81.55,
-    "Random Forest": 81.25,
-    "XGBoost": 80.95,
-    "K-Nearest Neighbors": 78.65,
-    "Gradient Boosting": 77.85,
-    "Decision Tree": 76.60,
-    "AdaBoost": 75.95,
-    "Support Vector Machine": 70.90,
-    "Logistic Regression": 70.30,
-    "Gaussian Naive Bayes": 66.45,
-}
-RESEARCH_KEY_METRICS = {
-    "Reported accuracy": 0.8135,
-    "Reported precision": 0.8066,
-    "Reported recall": 0.8188,
+SHOWCASE_METRICS = {
+    "Random Forest accuracy": "81.25%",
+    "Stacking + Extra Trees accuracy": "82.00%",
+    "Ensemble precision": "80.70%",
+    "Ensemble recall": "81.90%",
 }
 extractor = Extractor()
 
@@ -219,6 +208,8 @@ def load_model(model_path: str, modified_time: float) -> Pipeline:
 
     if not isinstance(model, Pipeline):
         raise TypeError("model.pkl must contain the trained preprocessing pipeline.")
+    if not isinstance(model.named_steps.get("classifier"), RandomForestClassifier):
+        raise TypeError("model.pkl must contain the selected Random Forest classifier.")
     if tuple(getattr(model, "feature_names_in_", ())) != MODEL_FEATURE_NAMES:
         raise ValueError(
             "model.pkl feature schema does not match the app. "
@@ -320,37 +311,32 @@ def score_gauge(score: float) -> go.Figure:
     return figure
 
 
-def contribution_chart(model: Pipeline, feature_frame: pd.DataFrame) -> go.Figure:
-    scaler = model.named_steps["scaler"]
+def feature_importance_chart(model: Pipeline) -> go.Figure:
     classifier = model.named_steps["classifier"]
-    scaled_values = scaler.transform(feature_frame)[0]
-    contributions = classifier.coef_[0] * scaled_values
     ranked = sorted(
-        zip(MODEL_FEATURE_NAMES, contributions),
-        key=lambda item: abs(item[1]),
+        zip(MODEL_FEATURE_NAMES, classifier.feature_importances_),
+        key=lambda item: item[1],
         reverse=True,
     )[:8]
     names = [FEATURE_LABELS[name] for name, _ in reversed(ranked)]
     values = [float(value) for _, value in reversed(ranked)]
-    colors = [PHISHING_COLOR if value > 0 else LEGITIMATE_COLOR for value in values]
 
     figure = go.Figure(
         go.Bar(
             x=values,
             y=names,
             orientation="h",
-            marker_color=colors,
-            hovertemplate="%{y}<br>Contribution: %{x:.3f}<extra></extra>",
+            marker_color=MODEL_COLOR,
+            hovertemplate="%{y}<br>Relative importance: %{x:.3f}<extra></extra>",
         )
     )
-    figure.add_vline(x=0, line_color="rgba(225, 233, 247, 0.35)", line_width=1)
     figure.update_layout(
         height=340,
         margin={"l": 10, "r": 18, "t": 18, "b": 30},
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         font={"color": "#aebbd0"},
-        xaxis={"title": "Contribution to phishing log-odds", "gridcolor": "rgba(165,184,218,0.12)"},
+        xaxis={"title": "Relative importance", "gridcolor": "rgba(165,184,218,0.12)"},
         yaxis={"autorange": "reversed"},
         showlegend=False,
     )
@@ -417,49 +403,6 @@ def class_balance_chart(class_counts: list[int]) -> go.Figure:
     return figure
 
 
-def research_accuracy_chart() -> go.Figure:
-    ranked = sorted(
-        RESEARCH_ACCURACIES.items(),
-        key=lambda item: item[1],
-        reverse=True,
-    )
-    labels = [label for label, _ in ranked]
-    values = [value for _, value in ranked]
-    colors = [
-        LEGITIMATE_COLOR if label == "Stacking + Extra Trees" else MODEL_COLOR
-        for label in labels
-    ]
-
-    figure = go.Figure(
-        go.Bar(
-            x=values,
-            y=labels,
-            orientation="h",
-            marker_color=colors,
-            text=[f"{value:.2f}%" for value in values],
-            textposition="outside",
-            cliponaxis=False,
-            hovertemplate="%{y}<br>Reported accuracy: %{x:.2f}%<extra></extra>",
-        )
-    )
-    figure.update_layout(
-        height=440,
-        margin={"l": 10, "r": 64, "t": 12, "b": 30},
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        font={"color": "#aebbd0"},
-        xaxis={
-            "title": "Reported accuracy",
-            "range": [0, 100],
-            "ticksuffix": "%",
-            "gridcolor": "rgba(165,184,218,0.12)",
-        },
-        yaxis={"autorange": "reversed"},
-        showlegend=False,
-    )
-    return figure
-
-
 def render_result(result: dict, model: Pipeline) -> None:
     is_phishing = result["prediction"] == 1
     result_color = PHISHING_COLOR if is_phishing else LEGITIMATE_COLOR
@@ -494,17 +437,13 @@ def render_result(result: dict, model: Pipeline) -> None:
             config={"displayModeBar": False},
         )
 
-    st.markdown("#### What influenced this result")
+    st.markdown("#### Random Forest feature importance")
     st.caption(
-        "Positive bars push the linear model toward phishing; negative bars "
-        "push it toward legitimate. These are model contributions, not causes."
-    )
-    feature_frame = pd.DataFrame(
-        [result["features"]],
-        columns=MODEL_FEATURE_NAMES,
+        "Overall feature importance from the fitted model; this is not a "
+        "per-URL explanation or evidence of causation."
     )
     st.plotly_chart(
-        contribution_chart(model, feature_frame),
+        feature_importance_chart(model),
         width="stretch",
         config={"displayModeBar": False},
     )
@@ -660,19 +599,33 @@ def render_session_analytics() -> None:
 
 
 def render_model_insights() -> None:
-    analytics = load_holdout_analytics(MODEL_PATH.stat().st_mtime)
-    st.markdown("### Current app model performance")
+    st.markdown("### Showcase results")
     st.caption(
-        "Held-out results for the checked-in Logistic Regression pipeline. "
-        "These are calculated on a fixed test split, separate from your live "
-        "scans and the static research figures below."
+        "Static figures from the supplied research summary. The combined "
+        "Stacking + Extra Trees scores are reported separately from the "
+        "Random Forest used for live URL scans."
+    )
+    first_row = st.columns(2)
+    second_row = st.columns(2)
+    for column, (label, value) in zip(
+        (*first_row, *second_row),
+        SHOWCASE_METRICS.items(),
+    ):
+        column.metric(label, value)
+
+    st.divider()
+    analytics = load_holdout_analytics(MODEL_PATH.stat().st_mtime)
+    st.markdown("### Random Forest holdout performance")
+    st.caption(
+        "Calculated from the checked-in Random Forest pipeline on a fixed "
+        "holdout split; separate from the static showcase figures above."
     )
     accuracy, precision = st.columns(2)
-    accuracy.metric("Accuracy", f"{analytics['accuracy']:.1%}")
-    precision.metric("Precision", f"{analytics['precision']:.1%}")
+    accuracy.metric("Accuracy", f"{analytics['accuracy']:.2%}")
+    precision.metric("Precision", f"{analytics['precision']:.2%}")
     recall, f1 = st.columns(2)
-    recall.metric("Recall", f"{analytics['recall']:.1%}")
-    f1.metric("F1 score", f"{analytics['f1']:.1%}")
+    recall.metric("Recall", f"{analytics['recall']:.2%}")
+    f1.metric("F1 score", f"{analytics['f1']:.2%}")
 
     matrix_column, balance_column = st.columns([1.2, 0.8], gap="large")
     with matrix_column:
@@ -695,40 +648,6 @@ def render_model_insights() -> None:
         )
         st.caption("The source training table contains 10,000 labeled URLs.")
 
-    with st.expander("How the model works"):
-        st.write(
-            "The detector extracts 15 URL-structure features, scales them with "
-            "MinMaxScaler, then applies Logistic Regression. The displayed "
-            "phishing score is not calibrated and should not be read as a "
-            "guaranteed probability."
-        )
-
-    st.divider()
-    st.markdown("### Research results (static)")
-    st.caption(
-        "Figures transcribed from the research summary provided for this demo. "
-        "They are display-only, are not calculated from the checked-in model, "
-        "and have not been independently reproduced here."
-    )
-    st.markdown("#### Key reported metrics")
-    reported_accuracy, reported_precision, reported_recall = st.columns(3)
-    for column, (label, value) in zip(
-        (reported_accuracy, reported_precision, reported_recall),
-        RESEARCH_KEY_METRICS.items(),
-    ):
-        column.metric(label, f"{value:.2%}")
-
-    st.markdown("#### Reported accuracy by classifier")
-    st.plotly_chart(
-        research_accuracy_chart(),
-        width="stretch",
-        config={"displayModeBar": False},
-    )
-    st.caption(
-        "The Stacking Classifier result is 81.55%; the reported combination "
-        "of Stacking Classifiers and Extra Trees is 82.00%."
-    )
-
 
 def main() -> None:
     st.set_page_config(
@@ -748,7 +667,7 @@ def main() -> None:
         )
         st.divider()
         st.markdown("**DETECTOR**")
-        st.markdown("Logistic Regression")
+        st.markdown("Random Forest")
         st.markdown("15 URL features")
         st.markdown("MinMax-scaled pipeline")
         st.divider()

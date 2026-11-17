@@ -2,7 +2,7 @@ import pickle
 from pathlib import Path
 
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import MinMaxScaler
@@ -33,7 +33,7 @@ def train_model(dataset_path=DATASET_PATH, model_path=MODEL_PATH):
     model = Pipeline(
         [
             ("scaler", MinMaxScaler()),
-            ("classifier", LogisticRegression(max_iter=1000)),
+            ("classifier", RandomForestClassifier(n_estimators=100, random_state=42)),
         ]
     )
     model.fit(x_train, y_train)
