@@ -1,8 +1,26 @@
-import pickle
 import requests
 from urllib.parse import urlparse, parse_qs
 import re
 import ipaddress
+
+MODEL_FEATURE_NAMES: tuple[str, ...] = (
+    "PathLength",
+    "UrlLength",
+    "HostnameLength",
+    "NumNumericChars",
+    "PathLevel",
+    "NumDots",
+    "SubdomainLevel",
+    "NumUnderscore",
+    "NumDashInHostname",
+    "RandomString",
+    "NumDash",
+    "QueryLength",
+    "NumQueryComponents",
+    "IpAddress",
+    "TinyURL",
+)
+
 
 # Feature extraction class
 class Extractor:
@@ -36,11 +54,9 @@ class Extractor:
         return parsed_url.netloc.count('-') + parsed_url.path.count('-')
     
     def at_symbol(self, url):
-        parsed_url = urlparse(url)
         return url.count('@')
     
     def tilde_symbol(self, url):
-        parsed_url = urlparse(url)
         return url.count('~')
 
     def num_underscore(self, url):
@@ -131,22 +147,35 @@ class Extractor:
         return 1 if '//' in urlparse(url).path else 0
     
 
-    def ip_address(url):
-    
-        url_domain = re.search(r'(?:https?://)?([^/]+)', url).group(1)
+    def ip_address(self, url: str) -> int:
+        hostname = urlparse(url).hostname
+        if hostname is None:
+            return 0
 
-        # Define regular expressions
-        ip_pattern = re.compile(r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}')
-        ipv4_pattern = re.compile(r'(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[0-9]?[0-9])(\.|$){4}')
-        hex_ipv4_pattern = re.compile(r'(0x([0-9][0-9]|[A-F][A-F]|[A-F][0-9]|[0-9][A-F]))(\.|$){4}')
+        try:
+            ipaddress.ip_address(hostname)
+        except ValueError:
+            return 0
+        return 1
 
-        # Check if the URL domain matches any pattern
-        if ip_pattern.match(url_domain) or ipv4_pattern.match(url_domain) or hex_ipv4_pattern.match(url_domain):
-            result = 1
-        else:
-            result = 0
-            
-        return result
+    def extract_model_features(self, url: str) -> dict[str, int]:
+        return {
+            "PathLength": self.path_length(url),
+            "UrlLength": self.url_length(url),
+            "HostnameLength": self.hostname_length(url),
+            "NumNumericChars": self.num_numeric_chars(url),
+            "PathLevel": self.path_level(url),
+            "NumDots": self.num_dots(url),
+            "SubdomainLevel": self.subdomain_level(url),
+            "NumUnderscore": self.num_underscore(url),
+            "NumDashInHostname": self.num_dash_in_hostname(url),
+            "RandomString": self.random_string(url),
+            "NumDash": self.num_dash(url),
+            "QueryLength": self.query_length(url),
+            "NumQueryComponents": self.num_query_components(url),
+            "IpAddress": self.ip_address(url),
+            "TinyURL": self.tinyURL(url),
+        }
 
 
     def iframe(self, response):

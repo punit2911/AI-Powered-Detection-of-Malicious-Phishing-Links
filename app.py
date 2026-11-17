@@ -1,105 +1,104 @@
-import streamlit as st
 import pickle
-from features_extraction import Extractor
-import os
+from pathlib import Path
+from urllib.parse import urlsplit
 
+import pandas as pd
+import streamlit as st
+from sklearn.pipeline import Pipeline
 
-# Load the model
-ml_model = pickle.load(open('model.pkl', 'rb'))
+from features_extraction import MODEL_FEATURE_NAMES, Extractor
+
+MODEL_PATH = Path(__file__).resolve().with_name("model.pkl")
 extractor = Extractor()
 
-# Function to extract features
-def extract_features(url):
-    features = extractor.extract(url)
-    return features
 
-# Function to make predictions
-def predict_phishing(features):
-    prediction = ml_model.predict([features])
-    return prediction
+def load_model() -> Pipeline:
+    with MODEL_PATH.open("rb") as model_file:
+        model = pickle.load(model_file)
 
-# Placeholder for EDA function
-def generate_eda_graphs(features):
-    # Implement your EDA graph generation here
-    pass
-
-# Streamlit app
-st.title("Phishing Classifier")
-
-# Input URL
-input_url = st.text_input("Enter URL")
+    if not isinstance(model, Pipeline):
+        raise TypeError("model.pkl must contain the trained preprocessing pipeline.")
+    if tuple(getattr(model, "feature_names_in_", ())) != MODEL_FEATURE_NAMES:
+        raise ValueError(
+            "model.pkl feature schema does not match the app. "
+            "Run `python train_model.py` to rebuild it."
+        )
+    return model
 
 
-# Predict button
-if st.button("Analyse"):
+def normalize_url(value: str) -> str:
+    url = value.strip()
+    if not url:
+        raise ValueError("Enter a URL to analyze.")
+    if "://" not in url:
+        url = f"https://{url}"
 
-    # Extract features
-    features = extract_features(input_url)
+    try:
+        parsed_url = urlsplit(url)
+        hostname = parsed_url.hostname
+        _ = parsed_url.port
+    except ValueError as error:
+        raise ValueError("Enter a valid HTTP or HTTPS URL.") from error
 
-    # Make prediction
-    prediction = predict_phishing(features)
+    if (
+        parsed_url.scheme.lower() not in {"http", "https"}
+        or not hostname
+        or any(character.isspace() for character in parsed_url.netloc)
+    ):
+        raise ValueError("Enter a valid HTTP or HTTPS URL.")
 
-    # Display prediction
+    return url
+
+
+def main() -> None:
+    st.set_page_config(page_title="Phishing URL Detector")
+    st.title("Phishing URL Detector")
+    st.write(
+        "Enter a URL to estimate whether its structure resembles the phishing "
+        "examples used to train this model."
+    )
+    input_url = st.text_input("Website URL", placeholder="https://example.com")
+
+    if not st.button("Analyze"):
+        return
+
+    try:
+        url = normalize_url(input_url)
+    except ValueError as error:
+        st.error(str(error))
+        return
+
+    features = extractor.extract_model_features(url)
+    feature_frame = pd.DataFrame(
+        [features],
+        columns=MODEL_FEATURE_NAMES,
+    )
+    model = load_model()
+    prediction = int(model.predict(feature_frame)[0])
+
     if prediction == 1:
-        st.subheader("Likely a Phishing Website")
-        st.image("image_red_cross.png", width=25)
+        st.subheader("Likely a phishing URL")
+        st.image(str(MODEL_PATH.with_name("image_red_cross.png")), width=40)
+        st.warning(
+            "Do not enter passwords or payment details. Verify the domain "
+            "through a trusted source."
+        )
     else:
-        st.subheader("Legitimate Website")
-        st.image("image_green_tick.png", width=25)
+        st.subheader("Likely a legitimate URL")
+        st.image(str(MODEL_PATH.with_name("image_green_tick.png")), width=40)
+        st.info(
+            "A legitimate prediction is not a safety guarantee. Check the "
+            "domain carefully before sharing sensitive information."
+        )
 
-
-    st.markdown("---")
-
-    feature_names = [
-            "Number of Dots",
-            "Subdomain Level",
-            "Path Level",
-            "URL Length",
-            "Number of Dashes",
-            "Number of Dashes in Hostname",
-            "At Symbol",
-            "Tilde Symbol",
-            "Number of Underscores",
-            "Number of Percent Signs",
-            "Number of Query Components",
-            "Number of Ampersands",
-            "Number of Hashtags",
-            "Number of Numeric Characters",
-            "No HTTPS",
-            "Random String",
-            "HTTPS in Hostname",
-            "Hostname Length",
-            "Path Length",
-            "Query Length",
-            "Double Slash in Path",
-            "TinyURL",
-            "iFrame",
-            "MouseOver",
-            "Forwarding",
-        ]
-    
-    extracted_features_list = list(zip(feature_names, features))
-
-    st.subheader("Extracted Features:")
-
-    for name, value in extracted_features_list:
+    st.caption(
+        "Experimental machine-learning result only; this classifier can make "
+        "mistakes and is not a substitute for security tools."
+    )
+    st.subheader("Model input features")
+    for name, value in features.items():
         st.text(f"{name}: {value}")
 
-    # Generate EDA graphs
-    generate_eda_graphs(features)
 
-    st.markdown("---")
-
-   
-    if prediction == 1:  # Check prediction
-        content = ml_model.generate_content(
-            "Generate content about phishing websites, detailing their characteristics, common tactics, and how to protect oneself from them. And also provide some online sources."
-        )
-    else:
-        content = ml_model.generate_content(
-            "Generate content about legitimate websites, explaining their key features and how they ensure user safety and security. And also provide some online sources."
-        )
-    st.markdown(content.text)
-    
-
-    # learn_more_btn = st.button("Learn More", on_click=learn_more)
+if __name__ == "__main__":
+    main()

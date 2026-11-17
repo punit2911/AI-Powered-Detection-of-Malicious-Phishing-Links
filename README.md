@@ -1,19 +1,18 @@
 # Phishing URL Detection
 
-A Streamlit prototype and a set of Jupyter notebooks for extracting URL and page
+A Streamlit application and a set of Jupyter notebooks for extracting URL
 features, training phishing classifiers, and comparing their performance.
 
-> **Prototype notice:** This repository is a research/demo project, not a
-> security product. Its checked-in Streamlit inference path currently has model
-> and feature-schema incompatibilities (documented below). Do not rely on it to
-> decide whether a website is safe.
+> **Research/demo notice:** This project is not a security product. Model
+> predictions are estimates and must not be used as the sole basis for deciding
+> whether a website is safe.
 
 ## Project architecture
 
-The project has two related but separate paths: the notebooks prepare data and
-evaluate models, while `app.py` loads a pre-existing serialized model for
-interactive inference. The notebooks do not currently save a replacement model
-artifact for the app.
+The notebooks prepare data and evaluate several models. `train_model.py`
+recreates the selected Logistic Regression model as a pipeline that includes
+the same MinMax scaling used during training. The Streamlit app extracts the
+pipeline's 15 URL features and uses the checked-in `model.pkl` for inference.
 
 ```mermaid
 flowchart LR
@@ -30,15 +29,16 @@ flowchart LR
         H --> J
         I --> J
         H --> K["5_Model-Selection.ipynb<br/>evaluate selected feature set"]
+        H --> T["train_model.py<br/>MinMaxScaler + LogisticRegression"]
+        T --> M["model.pkl<br/>15-feature pipeline"]
         J --> L["Saved notebook metrics and plots"]
         K --> L
     end
 
-    subgraph Inference["Streamlit prototype (app.py)"]
-        U["User enters URL"] --> X["Extractor.extract()<br/>25 runtime values"]
-        X --> M["model.pkl<br/>LogisticRegression expects 15 inputs"]
-        M --> R["Display predicted class<br/>(intended: 1 = phishing)"]
-        R --> GAI["Attempt generate_content() on classifier<br/>unsupported by LogisticRegression"]
+    subgraph Inference["Streamlit app (app.py)"]
+        U["User enters URL"] --> X["Normalize URL + extract<br/>the 15 selected features"]
+        X --> P["model.pkl pipeline<br/>MinMaxScaler + classifier"]
+        P --> R["Display predicted class<br/>(1 = phishing) and safety guidance"]
     end
 ```
 
@@ -47,8 +47,9 @@ flowchart LR
 | Component | Purpose |
 | --- | --- |
 | `app.py` | Streamlit URL input, inference, and result/feature display. |
-| `features_extraction.py` | `Extractor` computes URL-string features and makes an HTTP request to inspect page-related signals. |
-| `model.pkl` | Serialized scikit-learn `LogisticRegression` classifier; it expects 15 input features. |
+| `features_extraction.py` | `Extractor` computes the 15 URL-derived features in the exact order expected by the selected model. |
+| `train_model.py` | Reproduces the selected training split and saves a scikit-learn pipeline with MinMax scaling and Logistic Regression. |
+| `model.pkl` | Serialized scikit-learn pipeline (MinMax scaling + Logistic Regression), fitted to the 15 ordered columns in `dataset_2.csv`. |
 | `extractor.pkl` | Additional serialized notebook artifact; it is not loaded by `app.py`. |
 | `1_Data-Gathering.ipynb` | Samples labeled URLs from `test.csv` and writes the two URL lists. |
 | `2_Feature-Extraction.ipynb` | Extracts features and creates the combined `urldata.csv` dataset. |
@@ -139,36 +140,26 @@ python -m pip install -r requirements.txt
 streamlit run app.py
 ```
 
-**The command launches the UI, but the current app is not compatible
-end-to-end with the checked-in artifacts.** Resolve the following issues before
-using it for inference:
+The checked-in `model.pkl` is ready to use. To retrain it from `dataset_2.csv`
+with the project's fixed 80/20 split:
 
-- `Extractor.extract()` returns 25 values, while `model.pkl` is a
-  `LogisticRegression` fitted for 15 features. The app also needs a consistent
-  feature selection and ordering matching the model's training schema.
-- After prediction, `app.py` calls `generate_content()` on the scikit-learn
-  classifier. `LogisticRegression` does not provide that method, so the
-  follow-up text-generation step is not implemented through a compatible
-  generative-AI client.
-- `features_extraction.py` imports `requests`, and the notebooks import
-  `xgboost`, but neither package is listed in `requirements.txt`.
-- The serialized classifier was created with scikit-learn 1.3.0; loading it
-  with other versions can produce compatibility warnings or unreliable
-  behavior. Pickle artifacts should only be loaded from trusted sources.
+```bash
+python train_model.py
+```
 
-The notebook workflow can be explored by opening the numbered notebooks in
-order. Notebook dependencies and runtime versions are not fully pinned in
-`requirements.txt`.
+Run the app locally at `http://localhost:8501`. The model pipeline expects
+scikit-learn 1.8.0, which is pinned in `requirements.txt` for pickle
+compatibility. The other dependency versions are not pinned.
 
 ## Limitations
 
-- URL and HTML features are heuristic signals; HTTPS presence alone does not
-  establish that a site is safe.
-- The runtime extractor makes a network request to the submitted URL to derive
-  page-related features. Do not submit URLs unless your environment permits
-  that request and you understand its network/privacy implications.
+- The app uses URL structure features only; it does not inspect page content.
+  HTTPS presence alone does not establish that a site is safe.
+- The older `Extractor.extract()` method can request a URL for page-related
+  features, but the Streamlit app does not call it.
 - Evaluation values are from the supplied notebook outputs and accompanying
   paper, not a recent independent benchmark. Datasets and threat behavior can
   change over time.
+- Pickle artifacts should only be loaded from trusted sources.
 - This project is for research and educational use. It is not a substitute for
   browser protections, security review, or trusted threat-intelligence tools.
