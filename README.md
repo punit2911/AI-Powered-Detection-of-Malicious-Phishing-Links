@@ -1,5 +1,7 @@
 # Phishing URL Detection
 
+![PhishProbe dashboard](assets/phishprobe-dashboard.png)
+
 A Streamlit application and a set of Jupyter notebooks for extracting URL
 features, training phishing classifiers, and comparing their performance.
 
@@ -155,7 +157,7 @@ the combined Stacking Classifiers + Extra Trees result. The ensemble values
 are static research figures, not measurements from URL scans or the
 checked-in `model.pkl`.
 
-## Run the prototype
+## Quick start
 
 The app is built with Streamlit. From the repository root, install the declared
 requirements and launch it:
